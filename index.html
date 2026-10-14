@@ -46,7 +46,23 @@ header h1 span{color:var(--accent)}
 .how li{display:flex;gap:12px;align-items:center;font-weight:600}
 .how b{flex:none;width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--chip-ink);display:grid;place-items:center;font-weight:800}
 
-.list{padding-block:28px 12px;display:flex;flex-direction:column;gap:22px}
+.bar{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
+.bar .wrap{padding-block:10px;display:flex;flex-direction:column;gap:10px}
+.q{position:relative}
+.q svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:20px;height:20px;color:var(--muted);pointer-events:none}
+.q input{width:100%;height:48px;border-radius:999px;border:1px solid var(--line-strong);background:var(--card);color:var(--fg);font:inherit;font-size:17px;padding:0 44px 0 44px;-webkit-appearance:none;appearance:none}
+.q input::placeholder{color:var(--muted)}
+.q input:focus{outline:none;border-color:var(--accent)}
+.clr{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:0;border-radius:50%;background:var(--accent-soft);color:var(--chip-ink);font-size:20px;line-height:1;cursor:pointer}
+.chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin-inline:-16px;padding-inline:16px;scroll-padding-inline:16px;-webkit-overflow-scrolling:touch}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;height:42px;padding:0 16px;border-radius:999px;border:1px solid var(--line-strong);background:var(--card);color:var(--fg);font-weight:600;font-size:16px;cursor:pointer;white-space:nowrap}
+.chip small{color:var(--muted);font-weight:600;margin-left:4px;font-size:14px}
+.chip[aria-pressed="true"]{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.chip[aria-pressed="true"] small{color:inherit;opacity:.7}
+.empty{text-align:center;color:var(--muted);padding:30px 0}
+.empty button{margin-top:10px;border:0;background:var(--accent-soft);color:var(--chip-ink);font-weight:700;padding:10px 18px;border-radius:999px;cursor:pointer}
+.list{padding-block:22px 12px;display:flex;flex-direction:column;gap:22px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;box-shadow:0 4px 12px rgba(20,20,19,.06)}
 .gal{position:relative;aspect-ratio:4/3;background:var(--line);overflow:hidden}
 .ph{position:absolute;inset:0;display:block;width:100%;height:100%;border:0;padding:0;background:none;cursor:zoom-in}
@@ -95,13 +111,21 @@ header h1 span{color:var(--accent)}
   <h1>Vendo tutto: <span>trasloco</span></h1>
   <p class="intro">Mobili ed elettronica tenuti bene. Il ritiro è a carico di chi compra, a Modena o a Lugo.</p>
   <ol class="how">
-    <li><b>1</b>Guarda le foto: usa le frecce per vederne altre</li>
+    <li><b>1</b>Scegli una categoria o cerca, poi usa le frecce per vedere le foto</li>
     <li><b>2</b>Ti piace qualcosa? Premi «Mi interessa»</li>
     <li><b>3</b>Mi scrivi su WhatsApp e ci accordiamo</li>
   </ol>
 </div></header>
 
+<div class="bar"><div class="wrap">
+  <div class="q"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="q" type="search" placeholder="Cerca: divano, tavolo, TV…" aria-label="Cerca" autocomplete="off" enterkeyhint="search">
+    <button class="clr" id="clr" aria-label="Cancella ricerca" hidden>×</button></div>
+  <div class="chips" id="chips" role="group" aria-label="Categorie"></div>
+</div></div>
+
 <main class="wrap list" id="list"></main>
+<p class="wrap empty" id="empty" hidden>Nessun oggetto trovato.<br><button id="reset">Mostra tutto</button></p>
 
 <section class="wrap sold" id="sold" hidden><h3>Già venduti</h3><ul id="soldList"></ul></section>
 
@@ -136,18 +160,33 @@ $('num').textContent=D.phone;
 $('waAll').href=wa('Ciao Roberto, ho visto i mobili in vendita. ');
 const chevL='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
 const chevR='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+const norm=t=>String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 const items=D.items;
 const avail=items.filter(i=>!i.sold).sort((a,b)=>(b.featured-a.featured)||b.added.localeCompare(a.added));
 const sold=items.filter(i=>i.sold);
 $('list').innerHTML=avail.map(it=>{
   const info=[it.meas?esc(it.meas)+' cm':'',it.qty>1?it.qty+' disponibili':'',esc(it.note||'')].filter(Boolean);
   const m=it.photos.length>1;
-  return '<article class="card"><div class="gal" data-id="'+it.id+'" data-i="0"><button class="ph" aria-label="Ingrandisci la foto di '+esc(it.name)+'"><img src="'+it.photos[0][0]+'" alt="'+esc(it.name)+'" loading="lazy"></button>'+
+  return '<article class="card" data-cat="'+esc(it.cat)+'" data-s="'+esc(norm(it.name+' '+it.cat+' '+(it.note||'')+' '+it.loc))+'"><div class="gal" data-id="'+it.id+'" data-i="0"><button class="ph" aria-label="Ingrandisci la foto di '+esc(it.name)+'"><img src="'+it.photos[0][0]+'" alt="'+esc(it.name)+'" loading="lazy"></button>'+
     (m?'<button class="arr p" aria-label="Foto precedente">'+chevL+'</button><button class="arr n" aria-label="Foto successiva">'+chevR+'</button>':'')+
     (isNew(it)?'<span class="new">NUOVO</span>':'')+(m?'<span class="more">1 / '+it.photos.length+'</span>':'')+'</div>'+
     '<div class="body"><h2>'+esc(it.name)+'</h2><p class="info"><b>Ritiro a '+esc(it.loc)+'</b></p>'+info.map(t=>'<p class="info">'+t+'</p>').join('')+
     '<a class="btn" href="'+wa('Ciao Roberto, mi interessa: '+it.name+'. È ancora disponibile?')+'" target="_blank" rel="noopener">'+waIcon+'Mi interessa</a></div></article>';
 }).join('');
+
+const cats={};avail.forEach(i=>cats[i.cat]=(cats[i.cat]||0)+1);
+const order=Object.keys(cats).sort((a,b)=>cats[b]-cats[a]||a.localeCompare(b));
+let cat='';
+$('chips').innerHTML='<button class="chip" data-c="" aria-pressed="true">Tutti<small>'+avail.length+'</small></button>'+order.map(c=>'<button class="chip" data-c="'+esc(c)+'" aria-pressed="false">'+esc(c)+'<small>'+cats[c]+'</small></button>').join('');
+const apply=()=>{const q=norm($('q').value.trim());let n=0;
+  document.querySelectorAll('#list .card').forEach(c=>{const ok=(!cat||c.dataset.cat===cat)&&(!q||q.split(/\s+/).every(w=>c.dataset.s.includes(w)));c.hidden=!ok;if(ok)n++;});
+  $('empty').hidden=n>0;$('clr').hidden=!$('q').value;};
+$('chips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;cat=b.dataset.c;
+  document.querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===b));b.scrollIntoView({inline:'nearest',block:'nearest',behavior:'smooth'});apply();
+  const top=$('list').getBoundingClientRect().top+scrollY-document.querySelector('.bar').offsetHeight-8;if(scrollY>top)scrollTo({top,behavior:'smooth'});});
+$('q').addEventListener('input',apply);
+$('clr').onclick=()=>{$('q').value='';apply();$('q').focus();};
+$('reset').onclick=()=>{$('q').value='';cat='';document.querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x.dataset.c===''));apply();};
 if(sold.length){$('sold').hidden=false;$('soldList').innerHTML=sold.map(it=>'<li><img src="'+it.photos[0][0]+'" alt="" loading="lazy"><s>'+esc(it.name)+'</s><em>Venduto</em></li>').join('');}
 let cur=null,ci=0,last=null;
 const show=()=>{const p=cur.photos[ci];$('lbImg').src=p[0];$('lbImg').alt=cur.name;$('lbTitle').textContent=cur.name;$('lbCount').textContent=(ci+1)+' / '+cur.photos.length;const m=cur.photos.length>1;$('lbPrev').hidden=!m;$('lbNext').hidden=!m;};
